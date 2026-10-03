@@ -10,13 +10,16 @@
                        │
         ┌──────────────┼──────────────┬──────────────┐
         ▼              ▼              ▼              ▼
-   geometria.py    grafo.py       fisica.py   visualizacion.py
-   (hilos y        (topología,    (Y, I,      (gráficas)
-    junturas)       electrodos)    dinámica)
+   geometria.py    grafo.py       fisica/      visualizacion.py
+   (hilos y        (topología,    ├── admitancia.py   (gráficas)
+    junturas)       electrodos)   ├── corrientes.py
+                                   └── evolvers/
+                                       └── EVOLVER_SPECS
+                                           ◄── register_memristor_evol_model
         │              │              │              │
         └──────────────┴──────────────┘              │
                        ▼                             │
-                 simulador.py  ◄─────────────────────┘
+                 dinamica.py  ◄──────────────────────┘
                  (motor temporal)
                        │
                        ▼
@@ -35,19 +38,24 @@ simulation = {
     "junctions": {...},    # geometría de la red
     "graph": <networkx.Graph>,
     "terminals": {...},    # electrodos de entrada/salida
-    "circuit": {...},      # matriz Y, vector I, mapeo de nodos
+    "circuit": {...},      # matriz Y, vector I, mapeo de nodos,
+                           # arrays y máscaras por memristor
+    "evolver_state": {...} # estado propio del modelo de evolución
 }
 ~~~
 
 Cada función recibe `simulation` y lee lo que necesita de ahí. No hay
-variables globales ni parámetros leídos implícitamente del directorio
-de trabajo. Los overrides se hacen vía `parms=` en `setup_simulation` o
-`cargar_parametros`.
+parámetros globales ni leídos implícitamente del directorio de trabajo.
+La única excepción de estado global es el generador de números
+aleatorios: `setup_simulation` llama a `np.random.seed(RNG_SEED)` y
+tanto la geometría como los evolvers consumen `numpy.random`. Los overrides se hacen vía `parms=` en `setup_simulation` o
+`load_parameters`.
 
 ## Uso en Google Colab
 
-~~~python
-!pip install git+https://github.com/QILPCM-IFLP-CONICET/neuromorphicNWLamas.git
+~~~bash
+pip install git+https://github.com/QILPCM-IFLP-CONICET/neuromorphicNWLamas.git
+~~~
 
 import configparser, importlib, sys
 import ipywidgets as widgets
@@ -85,5 +93,38 @@ display(btn, out)
 ~~~
 
 Con el paquete instalable, **no hace falta clonar ni manipular
-`sys.path`**: `pip install` trae el paquete, el `defaults.ini` y los
-tests. Los overrides van todos por `parms=`.
+`sys.path`**: `pip install` trae el paquete y el `defaults.ini`. Los
+tests, la documentación y los benchmarks no se instalan; para eso hay
+que clonar el repositorio. Los overrides van todos por `parms=`.
+
+## Registro de evolvers
+
+`fisica/evolvers/base.py` mantiene un registro global
+`EVOLVER_SPECS: dict[str, EvolverSpec]`, donde cada `EvolverSpec` agrupa
+la función de update, una función de inicialización y los parámetros
+propios del modelo con sus valores por defecto. Cada modelo se registra al
+importar su módulo mediante el decorador
+`register_memristor_evol_model("nombre", init=..., parameters=...)`.
+
+Los modelos incluidos en el paquete se descubren solos: al importarse,
+`fisica/evolvers/__init__.py` recorre con `pkgutil.iter_modules` los
+módulos del directorio e importa con `importlib` todos los públicos
+(salvo `base`), en orden alfabético. La lista queda en
+`neuromorphic.fisica.evolvers.MODEL_MODULES`. Los módulos que empiezan
+con `_` no se importan automáticamente; ahí van las utilidades
+compartidas y el código con dependencias opcionales, como el kernel de
+`ladder_numba`, que recién se carga al inicializar ese modelo.
+
+El decorador está reexportado en `neuromorphic.fisica`, de modo que
+`from neuromorphic.fisica import register_memristor_evol_model` es la
+forma recomendada de importarlo. Registrar un nombre ya existente lo
+sobrescribe sin aviso.
+
+`initialize_evolver(simulation)` resuelve `p["EVOLVER"]` contra el
+registro, completa los parámetros por defecto del modelo, recrea
+`simulation["evolver_state"]` y llama a `init`. La invocan
+`setup_simulation` y, al comienzo de cada corrida, el motor temporal. La clave se lee del `.ini` como `evolver_model` en la sección
+`[Memristor]`, y puede sobrescribirse con `parms={"EVOLVER": "..."}`.
+
+Ver [`evolvers.md`](evolvers.md) para el contrato completo, la lista de
+modelos incluidos y ejemplos de implementaciones propias.

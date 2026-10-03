@@ -40,7 +40,21 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.5",
     "mypy>=1.0",
+    "types-networkx",
+    "scipy-stubs",
 ]
+docs = [
+    "sphinx>=7.0",
+    "myst-parser>=2.0",
+    "furo>=2024.0",          # tema moderno, alternativa a sphinx_rtd_theme
+    "sphinx-autobuild>=2024.0",  # preview con recarga en vivo
+    "sphinx-copybutton",
+    "sphinx-design",
+]
+numba = [
+    "numba>=0.59",
+]
+
 
 [project.urls]
 Homepage = "https://github.com/QILPCM-IFLP-CONICET/neuromorphicNWLamas"
@@ -50,7 +64,7 @@ Repository = "https://github.com/QILPCM-IFLP-CONICET/neuromorphicNWLamas"
 where = ["src"]
 
 [tool.setuptools.package-data]
-neuromorphic = ["*.ini"]
+neuromorphic = ["*.ini", "py.typed"]
 
 # ---------------------------------------------------------------------------
 # pytest
@@ -60,6 +74,8 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 filterwarnings = [
     "error::DeprecationWarning",
+    # Esperable en tests genéricos que corren 'thermal' con dt grande
+    "ignore::neuromorphic.fisica.evolvers.thermal.StepSaturationWarning",
 ]
 
 # ---------------------------------------------------------------------------
@@ -75,6 +91,13 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
 ]
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+[[tool.mypy.overrides]]
+module = ["numba", "numba.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # ruff

@@ -1,54 +1,45 @@
 # geometria.py
+from typing import Any
+
 import numpy as np
 
 
 # ==============================================================================
 # FUNCIONES DE GEOMETRÍA Y RED
 # ==============================================================================
-def generate_and_find_junctions(simulation: dict):
+def generate_and_find_junctions(simulation: dict[str, Any]) -> None:
+    """Genera la disposición espacial de los nanohilos y encuentra sus cruces.
+
+    Vectorizado con NumPy: la detección de intersecciones pasa de
+    :math:`O(N^2)` en Python puro a broadcasting vectorizado.
+
+    Parameters
+    ----------
+    simulation : dict
+        Diccionario de simulación. Debe contener ``"parameters"`` con las
+        claves ``NUM_WIRES``, ``AREA`` y ``LENGTH``.
+
+    Returns
+    -------
+    None
+        Modifica ``simulation`` in-place agregando la clave ``"junctions"``.
+
+    Notes
+    -----
+    La secuencia de llamadas RNG se preserva idénticamente respecto de la
+    versión original, así que con la misma semilla se obtienen los mismos
+    hilos y las mismas junturas.
+
+    La construcción de la matriz ``(N, N)`` de distancias consume
+    :math:`O(N^2)` memoria temporal (aprox. 200 MB para ``N=2000``).
+    Para ``N > 5000`` conviene chunkear.
     """
-    La función se encarga de simular la disposición de nanohilos
-    en un área cuadrada y encontrar todos los puntos donde estos
-    nanohilos se cruzan.
-    Usa los parámetros centralizados en config.ini a través del
-    diccionario 'p'.
-
-    Devuelve tres estructuras principales:
-
-    *wires*:
-        Es una lista de diccionarios, donde cada diccionario representa un nanohilo.
-        Cada nanohilo tiene:
-
-        'id': Un identificador único para el nanohilo.
-        'p1': Un array NumPy que representa las coordenadas (x, y) del primer extremo del nanohilo.
-        'p2': Un array NumPy que representa las coordenadas (x, y)
-         del segundo extremo del nanohilo.
-
-
-    *junctions*:
-        Es una lista de diccionarios, donde cada diccionario representa
-        un punto de cruce o unión entre dos nanohilos.
-        Cada unión contiene:
-
-        'id': Un identificador único para la unión.
-        'pos': Un array NumPy con las coordenadas (x, y) exactas del
-        punto de intersección.
-        'wires': Una tupla con los IDs de los dos nanohilos que se
-         cruzan en esa unión.
-
-
-    *wire_to_junctions*:
-        Es un diccionario que mapea el ID de cada nanohilo a una lista
-        de todas las uniones en las que participa ese nanohilo.
-        Esto es útil para navegar por las uniones a lo largo de un nanohilo específico.
-    """
-    # Extraemos las variables del diccionario centralizado
     p = simulation["parameters"]
     num_wires = p["NUM_WIRES"]
     wire_length = p["LENGTH"]
     area_size = p["AREA"]
 
-    # Generación de posiciones aleatorias basándonos en el substrato
+    # --- RNG: orden y argumentos idénticos a la versión original ---
     xc = np.random.uniform(0, area_size, num_wires)
     yc = np.random.uniform(0, area_size, num_wires)
     theta = np.random.uniform(0, np.pi, num_wires)
@@ -56,44 +47,60 @@ def generate_and_find_junctions(simulation: dict):
     x_off = (wire_length / 2) * np.cos(theta)
     y_off = (wire_length / 2) * np.sin(theta)
 
-    wires = []
-    for i in range(num_wires):
-        wires.append(
-            {
-                "id": i,
-                "p1": np.array((xc[i] - x_off[i], yc[i] - y_off[i])),
-                "p2": np.array((xc[i] + x_off[i], yc[i] + y_off[i])),
-            }
-        )
+    # Endpoints como arrays (N, 2)
+    p1_arr = np.stack([xc - x_off, yc - y_off], axis=1)
+    p2_arr = np.stack([xc + x_off, yc + y_off], axis=1)
+    d_arr = p2_arr - p1_arr
 
-    junctions, wire_to_junctions = [], {i: [] for i in range(num_wires)}
-    junction_id_counter = 0
+    wires = [{"id": i, "p1": p1_arr[i].copy(), "p2": p2_arr[i].copy()} for i in range(num_wires)]
 
-    # Detección de intersecciones por fuerza bruta
-    for i in range(num_wires):
-        for j in range(i + 1, num_wires):
-            w1, w2 = wires[i], wires[j]
-            d1 = w1["p2"] - w1["p1"]
-            d2 = w2["p2"] - w2["p1"]
-            denom = d1[0] * d2[1] - d1[1] * d2[0]
-            if denom != 0:
-                t = (
-                    (w2["p1"][0] - w1["p1"][0]) * d2[1] - (w2["p1"][1] - w1["p1"][1]) * d2[0]
-                ) / denom
-                u = (
-                    (w2["p1"][0] - w1["p1"][0]) * d1[1] - (w2["p1"][1] - w1["p1"][1]) * d1[0]
-                ) / denom
-                if 0 <= t <= 1 and 0 <= u <= 1:
-                    ix, iy = w1["p1"] + t * d1
-                    j_data = {"id": junction_id_counter, "pos": np.array([ix, iy]), "wires": (i, j)}
-                    junctions.append(j_data)
-                    wire_to_junctions[i].append(j_data)
-                    wire_to_junctions[j].append(j_data)
-                    junction_id_counter += 1
+    # --- Detección vectorizada de intersecciones ---
+    p1_x, p1_y = p1_arr[:, 0], p1_arr[:, 1]
+    d_x, d_y = d_arr[:, 0], d_arr[:, 1]
+
+    # denom[i, j] = d_x[i] * d_y[j] - d_y[i] * d_x[j]
+    denom = d_x[:, None] * d_y[None, :] - d_y[:, None] * d_x[None, :]
+
+    # Diferencias de punto inicial: p1[j] - p1[i]
+    dx_diff = p1_x[None, :] - p1_x[:, None]
+    dy_diff = p1_y[None, :] - p1_y[:, None]
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t_num = dx_diff * d_y[None, :] - dy_diff * d_x[None, :]
+        u_num = dx_diff * d_y[:, None] - dy_diff * d_x[:, None]
+        t = t_num / denom
+        u = u_num / denom
+
+    valid = (denom != 0.0) & (t >= 0.0) & (t <= 1.0) & (u >= 0.0) & (u <= 1.0)
+    # Quedarnos solo con i < j.
+    valid = np.triu(valid, k=1)
+
+    # np.nonzero devuelve en orden row-major (i, j), idéntico al
+    # orden de descubrimiento del doble loop original.
+    i_idx, j_idx = np.nonzero(valid)
+    n_junctions = len(i_idx)
+
+    # Coordenadas de intersección: p1[i] + t * d[i]
+    ix = p1_x[i_idx] + t[i_idx, j_idx] * d_x[i_idx]
+    iy = p1_y[i_idx] + t[i_idx, j_idx] * d_y[i_idx]
+
+    junctions: list[dict[str, Any]] = []
+    wire_to_junctions: dict[int, list[dict[str, Any]]] = {i: [] for i in range(num_wires)}
+
+    for k in range(n_junctions):
+        i = int(i_idx[k])
+        j = int(j_idx[k])
+        j_data = {
+            "id": k,
+            "pos": np.array([ix[k], iy[k]]),
+            "wires": (i, j),
+        }
+        junctions.append(j_data)
+        wire_to_junctions[i].append(j_data)
+        wire_to_junctions[j].append(j_data)
 
     simulation["junctions"] = {
         "wires": wires,
         "junctions": junctions,
         "wire_to_junctions": wire_to_junctions,
     }
-    return

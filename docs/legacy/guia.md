@@ -1,6 +1,12 @@
-# neuromorphicNWLamas
+# neuromorphicNWLamas — Guía histórica
 
-(Deprecated-> ver arquitectura.md)
+> ⚠️ **Deprecado.** Este documento describe la API previa al empaquetado
+> (uso de `config.ini`, imports planos, recarga de módulos con
+> `importlib.reload`, funciones `build_graph2`/`find_electrode_nodes2`).
+> La versión vigente está en [`arquitectura.md`](arquitectura.md). Para
+> el sistema de modelos de memristor, ver [`evolvers.md`](evolvers.md).
+
+---
 
 # Simulador de Redes de Nanohilos Neuromórficas (Nanowire Networks - NWN)
 

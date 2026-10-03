@@ -6,7 +6,7 @@ import copy
 
 import matplotlib
 
-from neuromorphic.simulador import run_simulation_dynamic_pulse
+from neuromorphic.dinamica import run_simulation_dynamic_pulse
 
 matplotlib.use("Agg")  # headless backend for CI
 
@@ -54,6 +54,17 @@ def percolating_params() -> dict:
 @pytest.fixture(scope="session")
 def _sim_small_base(small_params):
     return setup_simulation(parms=small_params)
+
+
+@pytest.fixture(scope="session")
+def _sim_small_unpruned(small_params):
+    """Red chica sin podar, para tests estructurales del grafo."""
+    return setup_simulation(parms=small_params, prune=False)
+
+
+@pytest.fixture
+def sim_small_unpruned(_sim_small_unpruned):
+    return copy.deepcopy(_sim_small_unpruned)
 
 
 @pytest.fixture(scope="session")

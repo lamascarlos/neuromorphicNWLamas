@@ -1,21 +1,35 @@
 # visualizacion.py
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_simulation_results(simulation, history_time, history_g_total):
-    """
-    Grafica la evolución temporal de la conductancia de la red durante un
-    experimento de pulso y relajación (Fig 2b).
+def plot_simulation_results(simulation: dict[str, Any], history_time, history_g_total) -> None:
+    """Grafica la evolución temporal de la conductancia de la red.
+
+    Reproduce el estilo de la Fig. 2b del paper: sombrea la fase de pulso
+    y la de relajación, y anota cada región. Los límites temporales y los
+    voltajes se leen de ``simulation["parameters"]``.
 
     Parameters
     ----------
     simulation : dict
-        Diccionario de simulación (para leer parámetros del experimento).
-    history_time : list or np.ndarray
+        Diccionario de simulación. Debe contener ``"parameters"`` con las
+        claves ``T_PULSE``, ``V_INPUT`` y ``V_READ``.
+    history_time : list of float or numpy.ndarray
         Vector de tiempos (s).
-    history_g_total : list or np.ndarray
-        Vector de conductancia equivalente total (mS).
+    history_G_total : list of float or numpy.ndarray
+        Conductancia equivalente total en cada paso (mS).
+
+    Returns
+    -------
+    None
+        Renderiza la figura en pantalla. No retorna objetos.
+
+    Notes
+    -----
+    Si ``history_time`` está vacío, imprime un aviso y no genera figura.
     """
     p = simulation["parameters"]
     t = np.array(history_time)

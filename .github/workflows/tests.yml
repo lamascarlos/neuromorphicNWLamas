@@ -26,7 +26,7 @@ jobs:
       - name: Install package and dev dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,numba]"
 
       - name: Lint with ruff
         run: ruff check src tests
@@ -36,7 +36,6 @@ jobs:
 
       - name: Type check with mypy
         run: mypy src
-        continue-on-error: true   # permitir fallos mientras se tipa el código
 
       - name: Run tests
         run: pytest -v --cov=neuromorphic --cov-report=xml

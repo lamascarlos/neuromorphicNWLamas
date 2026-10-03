@@ -2,3 +2,4 @@ include LICENSE
 include README.md
 include pyproject.toml
 recursive-include src/neuromorphic *.ini
+recursive-include src/neuromorphic py.typed
